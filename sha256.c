@@ -74,7 +74,11 @@ void sha256(){
 
 	// For Looping.
 	int t;
+	int i;
 	
+	// Loop through message blocks as per page 22
+	for (i = 0; i < 1; i++){
+
 	// From page 22, W[t] = M[t] for 0 <= t <= 15
 	for (t = 0; t < 16; t++)
 		W[t] = M[t];
@@ -115,6 +119,8 @@ void sha256(){
 	H[5] = f = H[5];
 	H[6] = g = H[6];
 	H[7] = h = H[7];
+
+	}
 
 	printf("%x %x %x %x %x %x %x %x\n", H[0], H[1], H[2], H[3], H[4], H[5], H[6], H[7]);
 }
