@@ -41,7 +41,7 @@ int main(int argc, char *argv[]){
 			S = FINISH;
 		}
 		// If there isn't enough room for the bytes in the last block
-		else if (nobytes < 64){
+		 else if (nobytes < 64){
 			S = PAD0;
 			M.e[nobytes] = 0x80;
 			// Fill the file with 0s until the last 64
@@ -54,9 +54,8 @@ int main(int argc, char *argv[]){
 		else if (feof(f)) {
 			S = PAD1;
 		}
-
+		
 	}
-
 	if (S == PAD0 || S == PAD1){
 		// Leave 8 bytes for 64bit integer
 		for(i = 0; i < 56; i++)
@@ -65,7 +64,7 @@ int main(int argc, char *argv[]){
 	}
 	if (S == PAD1)
 		M.e[0] = 0x80;
-
+	
 	fclose(f);
 	
 	for(int i = 0; i < 64; i++)
