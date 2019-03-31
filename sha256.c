@@ -44,11 +44,37 @@ int nextmsgblock(FILE *f, union msgblock *M, enum status *S, uint64_t *nobits);
 int main(int argc, char *argv[]){
 	// Open the file given as first command line arguement
 	FILE* msgf;
-	msgf = fopen(argv[1], "r");
-
-	// Run the secure hash algorithm on the file
-	sha256(msgf);
+	char* msgfName;
+	int argCount = argc;
 	
+	if(argCount == 0)
+	{
+		printf("Incorrect command please try again.\n");
+		//exit;
+	}
+	else if(argCount >= 1)
+	{
+		printf("Opening file.\n");
+
+		msgfName = argv[1];
+		// Open file givn in command line arguements
+		msgf = fopen(argv[1], "r");
+		if (msgf == NULL){
+			// Error handling 
+			printf("Error opening the file.\n");
+		}else{
+			// Run the secure hash algorithm on the file
+			printf("Performing hash.\n");
+			sha256(msgf);
+			
+		}
+	}
+	else 
+	{ 
+		printf("Invalid input, please try again.\n");
+		//exit;
+	}
+
 	// Close the file	
 	fclose(msgf);
 
@@ -113,17 +139,25 @@ void sha256(FILE *msgf){
 	int i;
 	
 	// Loop through message blocks as per page 22
-	while (nextmsgblock(msgf, &M, &S, &nobits)) {
-
+	while (nextmsgblock(msgf, &M, &S, &nobits)) 
+	{
 		// From page 22, W[t] = M[t] for 0 <= t <= 15
 		for (t = 0; t < 16; t++)
-			W[t] = M.t[t];
+
+			// Check if the systemis big or little endian
+			if(IS_BIG_ENDIAN){
+				W[t] = M.t[t];
+			}else {
+				W[t] = SWAP_UINT32(M.t[t]);
+			}
 
 		// From page 22, W[t] ...
 		for(t = 16; t <64; t++)
+			// Step 1
 			W[t] = sig1(W[t-2]) + W[t-7] + sig0(W[t-15]) + W[t-16];
 
 		// Initialise a, b, c, d, e, f, g, h. Step 2 Pg.22
+		// Steo 2
 		a = H[0];
 		b = H[1];
 		c = H[2];
@@ -133,6 +167,7 @@ void sha256(FILE *msgf){
 		g = H[6];
 		h = H[7];
 	
+		// Step 3
 		for (t = 0; t < 64; t++) {
 			T1 = h + SIG1(e) + Ch(e, f, g) + K[t] + W[t];
 			T2 = SIG0(a) + Maj(a, b, c);
@@ -146,6 +181,7 @@ void sha256(FILE *msgf){
 			a = T1 + T2;
 		}
 
+		// Step 4
 		H[0] = a + H[0];
 		H[1] = b = H[1];
 		H[2] = c = H[2];
@@ -157,6 +193,8 @@ void sha256(FILE *msgf){
 
 	}
 	// Check if it is big endian if it isn't bytes are swapped
+	//printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", H[0], H[1], H[2], H[3], H[4], H[5], H[6], H[7]);
+	
 	if(IS_BIG_ENDIAN){
 		printf("%08x %08x %08x %08x %08x %08x %08x %08x\n", H[0], H[1], H[2], H[3], H[4], H[5], H[6], H[7]);
 
@@ -204,75 +242,61 @@ int nextmsgblock(FILE *msgf, union msgblock *M, enum status *S, uint64_t *nobits
 	uint64_t nobytes;
 	 	
 	int i;
-/*	
-	if (NULL != msgf){
-		fseek (msgf,0,SEEK_END);
-		int size = ftell(msgf);
-		if(0 == size)
-			printf("file is empty\n");
-		else if (size > 0)
-			fseek (msgf, 0, SEEK_SET);
-
-		*/	
-//======================================================
-		//If message blocks are done S = FINISH
-		if(*S == FINISH)
-			return 0;
-// =====================================================
-
-	       // OTHERWISE CHECK IF WE NEED ANOTHER BLOCK OF PADDING	
-		if (*S == PAD0 || *S == PAD1){
-			// Leave 8 bytes for 64bit integer
-			for(i = 0; i < 56; i++)
-				M->e[i] = 0x00;
-			// Set last 64 bits to number of bits in the file
-			M->s[7] = *nobits;
-			// Tell S we are finished
-			*S = FINISH;
-			// If S was PAD1, then set the first bits of M to 1
-			if (*S == PAD1)
-				M->e[0] = 0x80;
-			// Keep the loop going for 1 more iteration
-			return 1;
-		}
+	//If message blocks are done S = FINISH
+	if(*S == FINISH)
+			return 0;	
+	// OTHERWISE CHECK IF WE NEED ANOTHER BLOCK OF PADDING	
+	if (*S == PAD0 || *S == PAD1){
+	// Leave 8 bytes for 64bit integer
+		for(i = 0; i < 56; i++)
+			M->e[i] = 0x00;
+		// Set last 64 bits to number of bits in the file
+		M->s[7] = *nobits;
+		// Tell S we are finished
+		*S = FINISH;
+		// If S was PAD1, then set the first bits of M to 1
+		if (*S == PAD1)
+			M->e[0] = 0x80;
+		// Keep the loop going for 1 more iteration
+		return 1;
+	}
 		
-			// Haven't finished reading the files (S == READ)
-			nobytes = fread(M->e, 1, 64, msgf);
-		
-			// Multiply number of bytes read by 8
-			*nobits = *nobits + (nobytes * 8);
-				// if less than 56 bytes we can pad the whole block
-				if (nobytes < 56) {
-					// 0x80 hexidecimal value for 1 followed by 7 0s
-					// Add 1 bit per standard 
-					M->e[nobytes] = 0x80;
-					// Add zero bits until the last 64 bits
-					while (nobytes < 56) {
-						nobytes = nobytes + 1;
-						M->e[nobytes] = 0x00;
-					}
-					// Last 8 are for number of bytes in the files
-					M->s[7] = *nobits;
-					*S = FINISH;
+		// Haven't finished reading the files (S == READ)
+		nobytes = fread(M->e, 1, 64, msgf);
+	
+		// Multiply number of bytes read by 8
+		*nobits = *nobits + (nobytes * 8);
+		// if less than 56 bytes we can pad the whole block
+		if (nobytes < 56) {
+			// 0x80 hexidecimal value for 1 followed by 7 0s
+			// Add 1 bit per standard 
+			M->e[nobytes] = 0x80;
+			// Add zero bits until the last 64 bits
+			while (nobytes < 56) {
+				nobytes = nobytes + 1;
+				M->e[nobytes] = 0x00;
+			}
+			// Last 8 are for number of bytes in the files
+				M->s[7] = *nobits;
+				*S = FINISH;
+			}
+			// If there isn't enough room for the bytes in the last block
+			else if (nobytes < 64){
+				// Another blocked needed with padding but no 1 bits
+				*S = PAD0;
+				// Put one bit into current block
+				M->e[nobytes] = 0x80;
+				// Fill the file with 0s until the last 64
+				while (nobytes < 64){
+					nobytes = nobytes + 1;
+					M->e[nobytes] = 0x00;
 				}
-				// If there isn't enough room for the bytes in the last block
-				else if (nobytes < 64){
-					// Another blocked needed with padding but no 1 bits
-					*S = PAD0;
-					// Put one bit into current block
-					M->e[nobytes] = 0x80;
-					// Fill the file with 0s until the last 64
-					while (nobytes < 64){
-						nobytes = nobytes + 1;
-						M->e[nobytes] = 0x00;
-					}
-				}
-				// If there are exactly 64 bytes remaining
-				else if (feof(msgf)) {
-					// Message block with all padding needed
-					*S = PAD1;
-				}
-//		}	
+			}
+			// If there are exactly 64 bytes remaining
+			else if (feof(msgf)) {
+				// Message block with all padding needed
+				*S = PAD1;
+			}
 
 	// Return 1 so the the function is called again
 	return 1;
